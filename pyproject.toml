@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codesk"
+version = "0.1.0"
+description = "Lightweight agent collaboration layer for structured assistant sync"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{name = "Wang / Hermes supervised Codex workflow"}]
+dependencies = []
+
+[project.scripts]
+codesk = "codesk.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

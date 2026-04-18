@@ -6,8 +6,11 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
+from codesk.bootstrap import SetupRequest, run_setup
+from codesk.config import CONFIG_FILE_NAME, load_config, summarize_config
 from codesk.digest import build_weekly_digest_markdown, write_weekly_digest_report
 from codesk.indexing import build_status_summary
+from codesk.prompts import render_all_prompts
 from codesk.sync_packet import build_sync_packet_markdown, write_sync_packet_report
 from codesk.templates import (
     create_decision_record,
@@ -16,11 +19,28 @@ from codesk.templates import (
     create_weekly_record,
 )
 from codesk.validation import validate_workspace
-from codesk.workspace import init_workspace
+from codesk.workspace import WORKSPACE_ROOT_NAME, init_workspace
 
 
 def _workspace_root(directory: str | Path) -> Path:
     return init_workspace(directory)
+
+
+def _config_path_from_directory(directory: str | Path) -> Path:
+    target = Path(directory).expanduser()
+
+    if target.is_file() and target.name == CONFIG_FILE_NAME:
+        return target
+
+    workspace_config = target / CONFIG_FILE_NAME
+    if workspace_config.is_file():
+        return workspace_config
+
+    nested_workspace_config = target / WORKSPACE_ROOT_NAME / CONFIG_FILE_NAME
+    if nested_workspace_config.is_file():
+        return nested_workspace_config
+
+    return nested_workspace_config
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,6 +60,33 @@ def build_parser() -> argparse.ArgumentParser:
         default=".",
         help="Target directory for the workspace root.",
     )
+
+    setup = subparsers.add_parser(
+        "setup",
+        help="Create a ready-to-use CoDesk workspace, config, and prompts.",
+    )
+    setup.add_argument("directory", nargs="?", default=".")
+    setup.add_argument("--project-name")
+    setup.add_argument("--objective")
+    setup.add_argument("--agent-a")
+    setup.add_argument("--agent-b")
+    setup.add_argument("--sync-frequency")
+    setup.add_argument("--notes")
+    setup.add_argument("--seed-project-id")
+    setup.add_argument("--agent-a-home")
+    setup.add_argument("--agent-b-home")
+
+    print_prompts = subparsers.add_parser(
+        "print-prompts",
+        help="Print both bootstrap prompt blocks from an existing config.",
+    )
+    print_prompts.add_argument("directory", nargs="?", default=".")
+
+    show_config = subparsers.add_parser(
+        "show-config",
+        help="Show a human-readable summary from an existing config.",
+    )
+    show_config.add_argument("directory", nargs="?", default=".")
 
     new_project = subparsers.add_parser("new-project", help="Create a project record.")
     new_project.add_argument("directory", nargs="?", default=".")
@@ -127,6 +174,54 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "init":
         workspace_root = init_workspace(args.directory)
         print(f"Initialized CoDesk workspace at {workspace_root}")
+        return 0
+
+    if args.command == "setup":
+        result = run_setup(
+            SetupRequest(
+                directory=args.directory,
+                project_name=args.project_name,
+                objective=args.objective,
+                agent_a=args.agent_a,
+                agent_b=args.agent_b,
+                sync_frequency=args.sync_frequency,
+                notes=args.notes,
+                seed_project_id=args.seed_project_id,
+                agent_a_home=args.agent_a_home,
+                agent_b_home=args.agent_b_home,
+            )
+        )
+        print("CoDesk workspace created at:")
+        print(result.workspace_path)
+        print()
+        print("Config written to:")
+        print(result.config_path)
+        print()
+        print("Next step:")
+        print("1. Copy PROMPT A into Agent 1")
+        print("2. Copy PROMPT B into Agent 2")
+        print("3. Ask each agent to confirm its first sync run")
+        print()
+        print("===== PROMPT FOR AGENT 1 =====")
+        print(result.prompt_a)
+        print()
+        print("===== PROMPT FOR AGENT 2 =====")
+        print(result.prompt_b)
+        return 0
+
+    if args.command == "print-prompts":
+        config = load_config(_config_path_from_directory(args.directory))
+        prompts = render_all_prompts(config)
+        print("===== PROMPT FOR AGENT 1 =====")
+        print(prompts["a"])
+        print()
+        print("===== PROMPT FOR AGENT 2 =====")
+        print(prompts["b"])
+        return 0
+
+    if args.command == "show-config":
+        config = load_config(_config_path_from_directory(args.directory))
+        print(summarize_config(config))
         return 0
 
     if args.command == "new-project":

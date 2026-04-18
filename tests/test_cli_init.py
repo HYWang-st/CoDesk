@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from codesk.cli import main
+from codesk.config import load_config
 from codesk.workspace import EXPECTED_WORKSPACE_DIRS, WORKSPACE_ROOT_NAME
 
 
@@ -24,6 +25,162 @@ def test_cli_init_creates_expected_workspace_tree(
         for relative_path in EXPECTED_WORKSPACE_DIRS
         if relative_path != Path(".")
     }
+
+
+def test_cli_setup_creates_workspace_config_and_prints_prompt_blocks(
+    tmp_path: Path, capsys
+) -> None:
+    exit_code = main(
+        [
+            "setup",
+            str(tmp_path),
+            "--agent-a-home",
+            "/tmp/hermes-home",
+            "--agent-b-home",
+            "/tmp/openclaw-home",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    workspace_root = tmp_path / WORKSPACE_ROOT_NAME
+    config_path = workspace_root / "config.yaml"
+    weekly_digest = workspace_root / "shared" / "reports" / "weekly-digest.md"
+    packet_ab = workspace_root / "shared" / "reports" / "sync-packet-hermes-to-openclaw.md"
+    packet_ba = workspace_root / "shared" / "reports" / "sync-packet-openclaw-to-hermes.md"
+
+    assert exit_code == 0
+    assert captured.out.startswith("CoDesk workspace created at:\n")
+    assert f"CoDesk workspace created at:\n{workspace_root.resolve()}\n" in captured.out
+    assert f"Config written to:\n{config_path.resolve()}\n" in captured.out
+    assert "Next step:\n1. Copy PROMPT A into Agent 1\n2. Copy PROMPT B into Agent 2\n3. Ask each agent to confirm its first sync run\n" in captured.out
+    assert "===== PROMPT FOR AGENT 1 =====" in captured.out
+    assert "===== PROMPT FOR AGENT 2 =====" in captured.out
+    assert workspace_root.is_dir()
+    assert config_path.is_file()
+    assert weekly_digest.is_file()
+    assert packet_ab.is_file()
+    assert packet_ba.is_file()
+
+
+def test_cli_setup_accepts_non_interactive_arguments(tmp_path: Path, capsys) -> None:
+    exit_code = main(
+        [
+            "setup",
+            str(tmp_path),
+            "--project-name",
+            "Codex + Claude launch",
+            "--objective",
+            "Ship the bootstrap flow together.",
+            "--agent-a",
+            "codex",
+            "--agent-b",
+            "claude",
+            "--sync-frequency",
+            "weekly",
+            "--notes",
+            "Keep updates short.",
+            "--seed-project-id",
+            "proj-001",
+            "--agent-a-home",
+            "/agents/codex",
+            "--agent-b-home",
+            "/agents/claude",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    workspace_root = tmp_path / WORKSPACE_ROOT_NAME
+    config = load_config(workspace_root / "config.yaml")
+    project_path = workspace_root / "blackboard" / "projects" / "proj-001.md"
+
+    assert exit_code == 0
+    assert "===== PROMPT FOR AGENT 1 =====" in captured.out
+    assert config["project_name"] == "Codex + Claude launch"
+    assert config["objective"] == "Ship the bootstrap flow together."
+    assert config["sync"]["frequency"] == "weekly"
+    assert config["agents"]["a"]["name"] == "codex"
+    assert config["agents"]["b"]["name"] == "claude"
+    assert config["agents"]["a"]["detected_paths"] == {"home": "/agents/codex"}
+    assert config["agents"]["b"]["detected_paths"] == {"home": "/agents/claude"}
+    assert config["bootstrap"]["seed_project_id"] == "proj-001"
+    assert config["bootstrap"]["user_notes"] == "Keep updates short."
+    assert project_path.is_file()
+    assert "owner: codex" in project_path.read_text(encoding="utf-8")
+
+
+def test_cli_print_prompts_reads_existing_config_and_reprints_both_blocks(
+    tmp_path: Path, capsys
+) -> None:
+    main(
+        [
+            "setup",
+            str(tmp_path),
+            "--agent-a-home",
+            "/tmp/hermes-home",
+            "--agent-b-home",
+            "/tmp/openclaw-home",
+        ]
+    )
+    capsys.readouterr()
+
+    exit_code = main(["print-prompts", str(tmp_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "===== PROMPT FOR AGENT 1 =====" in captured.out
+    assert "===== PROMPT FOR AGENT 2 =====" in captured.out
+    assert "You are Hermes" in captured.out
+    assert "You are OpenClaw" in captured.out
+    assert str((tmp_path / WORKSPACE_ROOT_NAME).resolve()) in captured.out
+
+
+def test_cli_show_config_prints_summary(tmp_path: Path, capsys) -> None:
+    main(
+        [
+            "setup",
+            str(tmp_path),
+            "--project-name",
+            "Readable summary test",
+            "--objective",
+            "Keep the two agents aligned.",
+            "--sync-frequency",
+            "weekly",
+            "--agent-a-home",
+            "/tmp/hermes-home",
+            "--agent-b-home",
+            "/tmp/openclaw-home",
+        ]
+    )
+    capsys.readouterr()
+
+    exit_code = main(["show-config", str(tmp_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Project: Readable summary test" in captured.out
+    assert "Objective: Keep the two agents aligned." in captured.out
+    assert "Sync frequency: weekly" in captured.out
+    assert "Agent A: hermes" in captured.out
+    assert "Agent B: openclaw" in captured.out
+    assert str((tmp_path / WORKSPACE_ROOT_NAME).resolve()) in captured.out
+
+
+def test_existing_cli_commands_still_work_after_new_commands_added(
+    tmp_path: Path, capsys
+) -> None:
+    init_exit_code = main(["init", str(tmp_path)])
+    init_output = capsys.readouterr()
+
+    status_exit_code = main(["status", str(tmp_path)])
+    status_output = capsys.readouterr()
+
+    assert init_exit_code == 0
+    assert "Initialized CoDesk workspace" in init_output.out
+    assert status_exit_code == 0
+    assert "Projects: 0" in status_output.out
+    assert "Weekly: 0" in status_output.out
+    assert "Handoffs: 0" in status_output.out
+    assert "Decisions: 0" in status_output.out
 
 
 def test_cli_new_project_creates_record(tmp_path: Path, capsys) -> None:

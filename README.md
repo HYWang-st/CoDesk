@@ -81,7 +81,7 @@ CoDesk 的想法很朴素：
 如果你是直接在仓库里试用，**先进入 CoDesk 仓库根目录再运行命令**。
 
 ```bash
-cd /Users/starsama/Code/CoDesk
+cd /Users/path/to/CoDesk
 ```
 
 原因很简单：当前用法里有一段 `PYTHONPATH=src`，它是按**当前目录**解释的。

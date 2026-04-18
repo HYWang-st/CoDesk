@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from codesk.agents import KNOWN_AGENTS, detect_agent, detect_agents, list_candidate_paths
 
 
@@ -42,7 +44,7 @@ def test_detect_agent_falls_back_to_registry_candidate(tmp_path: Path) -> None:
 
     detected = detect_agent("openclaw", home_path=tmp_path)
 
-    assert detected["selection_source"] == "registry"
+    assert detected["selection_source"] == "auto-detected"
     assert detected["detected_paths"] == {"home": str(registry_home)}
     assert detected["candidate_paths"] == [str(registry_home)]
 
@@ -81,7 +83,7 @@ def test_detect_agents_returns_both_slots_with_metadata(tmp_path: Path) -> None:
         "display_name": "Hermes",
         "supports_native_schedule": True,
         "prompt_hint": "Use the shared CoDesk workspace as the source of truth.",
-        "selection_source": "registry",
+        "selection_source": "auto-detected",
         "detected_paths": {"home": str(hermes_home)},
         "candidate_paths": [str(hermes_home)],
     }
@@ -98,3 +100,25 @@ def test_detect_agents_returns_both_slots_with_metadata(tmp_path: Path) -> None:
 
 def test_list_candidate_paths_uses_injected_home_path(tmp_path: Path) -> None:
     assert list_candidate_paths("openclaw", home_path=tmp_path) == [tmp_path / ".openclaw"]
+
+
+def test_detect_agent_rejects_blank_explicit_home(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="explicit_home"):
+        detect_agent("openclaw", explicit_home="   ", home_path=tmp_path)
+
+
+def test_detect_agent_rejects_missing_agent_name(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="agent_name"):
+        detect_agent(None, home_path=tmp_path)  # type: ignore[arg-type]
+
+
+def test_list_candidate_paths_preserves_template_order_for_known_agents(tmp_path: Path) -> None:
+    original_templates = KNOWN_AGENTS["openclaw"]["candidate_path_templates"]
+    KNOWN_AGENTS["openclaw"]["candidate_path_templates"] = ("~/.openclaw", "~/Library/OpenClaw")
+    try:
+        assert list_candidate_paths("openclaw", home_path=tmp_path) == [
+            tmp_path / ".openclaw",
+            tmp_path / "Library" / "OpenClaw",
+        ]
+    finally:
+        KNOWN_AGENTS["openclaw"]["candidate_path_templates"] = original_templates

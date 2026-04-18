@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 AgentMetadata = dict[str, Any]
+AUTO_DETECTED_SOURCE = "auto-detected"
 
 
 KNOWN_AGENTS: dict[str, AgentMetadata] = {
@@ -57,17 +58,18 @@ def detect_agent(
     """Detect the best local path metadata for a single agent.
 
     Precedence order is deterministic and intentionally simple:
-    explicit > env > registry > none.
+    explicit > env > auto-detected > none.
     """
 
-    entry = _get_registry_entry(agent_name) or _build_unknown_agent_entry(agent_name)
+    normalized_name = _normalize_agent_name(agent_name)
+    entry = _get_registry_entry(normalized_name) or _build_unknown_agent_entry(normalized_name)
     candidate_paths = list_candidate_paths(entry["name"], home_path=home_path)
 
     selected_home: Path | None = None
     selection_source = "none"
 
     if explicit_home is not None:
-        selected_home = Path(explicit_home).expanduser()
+        selected_home = _normalize_explicit_home(explicit_home)
         selection_source = "explicit"
     else:
         environment = env if env is not None else os.environ
@@ -79,7 +81,7 @@ def detect_agent(
             for candidate in candidate_paths:
                 if candidate.exists():
                     selected_home = candidate
-                    selection_source = "registry"
+                    selection_source = AUTO_DETECTED_SOURCE
                     break
 
     return {
@@ -125,10 +127,9 @@ def _get_registry_entry(agent_name: str) -> AgentMetadata | None:
 
 
 def _build_unknown_agent_entry(agent_name: str) -> AgentMetadata:
-    name = _normalize_agent_name(agent_name)
     return {
-        "name": name,
-        "display_name": _display_name(name),
+        "name": agent_name,
+        "display_name": _default_display_name(agent_name),
         "supports_native_schedule": True,
         "prompt_hint": "",
         "env_vars": (),
@@ -137,14 +138,20 @@ def _build_unknown_agent_entry(agent_name: str) -> AgentMetadata:
 
 
 def _normalize_agent_name(agent_name: str) -> str:
-    return str(agent_name).strip().lower()
+    normalized = "" if agent_name is None else str(agent_name).strip().lower()
+    if not normalized:
+        raise ValueError("agent_name must be a non-empty string")
+    return normalized
 
 
-def _display_name(agent_name: str) -> str:
-    if agent_name == "openclaw":
-        return "OpenClaw"
-    if agent_name == "hermes":
-        return "Hermes"
+def _normalize_explicit_home(explicit_home: str | Path) -> Path:
+    explicit_value = str(explicit_home).strip()
+    if not explicit_value:
+        raise ValueError("explicit_home must be a non-empty path when provided")
+    return Path(explicit_value).expanduser()
+
+
+def _default_display_name(agent_name: str) -> str:
     return agent_name.replace("-", " ").replace("_", " ").title()
 
 

@@ -1,15 +1,51 @@
 # CoDesk
 
-一个给双 Agent 协作准备的轻量文件层。
+> 一个给双 Agent 协作准备的轻量文件层。先把协作跑起来，再慢慢加能力。
 
-它不做消息中转，不做数据库，也不假装有“共享大脑”。它做的事很简单：
+CoDesk 不是消息中转站，也不是数据库，更不是“共享大脑”。
+它做的事很直接：
 
-- 建一个清晰可读的共享工作区
+- 建一个清晰的共享工作区
 - 把协作配置写进文件
-- 生成两段可直接发给两个 Agent 的启动提示词
-- 用 blackboard / reports 这些文件把协作状态留在磁盘上
+- 生成两段可直接发给两个 Agent 的启动 prompt
+- 把 blackboard、handoff、report 这些协作痕迹留在磁盘上
 
-如果你想要的是“先跑起来，再慢慢加能力”，CoDesk 就是干这个的。
+如果你想要的是 **一条命令起盘、文件可读、流程可查、后面还能继续扩**，它就是干这个的。
+
+---
+
+## 目录
+
+- [它解决什么问题](#它解决什么问题)
+- [现在能做什么](#现在能做什么)
+- [30 秒上手](#30-秒上手)
+- [你会得到什么](#你会得到什么)
+- [推荐工作方式](#推荐工作方式)
+- [常用命令](#常用命令)
+- [手工工作流](#手工工作流)
+- [目录结构](#目录结构)
+- [当前内建支持](#当前内建支持)
+- [faq](#faq)
+- [适合什么，不适合什么](#适合什么不适合什么)
+- [roadmap](#roadmap)
+
+---
+
+## 它解决什么问题
+
+很多双 Agent 协作最后会卡在两个地方：
+
+1. 状态只活在上下文里，窗口一换就断
+2. 没有稳定的交接面，所有 handoff 都靠人手转述
+
+CoDesk 的想法很朴素：
+
+- **共享状态放文件里**
+- **Agent 各自保持独立**
+- **交接靠 blackboard 和 reports**
+- **启动靠 setup 一次性拉起**
+
+这样你不用先搭一个大系统，先有一个能落地、能检查、能继续迭代的版本就够了。
 
 ---
 
@@ -17,39 +53,43 @@
 
 当前版本已经支持：
 
-- 一条命令创建协作工作区：`setup`
-- 生成持久化配置：`assistant-sync/config.yaml`
-- 为两个 Agent 生成启动 prompt
-- 生成初始报告文件
-- 内建 `hermes` / `openclaw` 的基础识别与本地路径探测
-- 重新打印 prompt：`print-prompts`
-- 查看当前配置：`show-config`
-- 保留原来的底层手工命令：`init / new-project / new-weekly / new-handoff / new-decision / validate / status / weekly-digest / sync-packet / generate-reports`
+- `setup`：一条命令创建协作空间
+- `assistant-sync/config.yaml`：持久化协作配置
+- 双 Agent 启动 prompt 自动生成
+- 初始报告文件自动生成
+- `print-prompts`：随时重打两段 prompt
+- `show-config`：查看当前配置摘要
+- 内建 `hermes` / `openclaw` 的基础识别和本地路径探测
+- 保留原来的底层手工命令：
+  - `init`
+  - `new-project`
+  - `new-weekly`
+  - `new-handoff`
+  - `new-decision`
+  - `validate`
+  - `status`
+  - `weekly-digest`
+  - `sync-packet`
+  - `generate-reports`
 
 ---
 
-## 快速开始
+## 30 秒上手
 
-### 先说最重要的一点
+### 第一步：进入仓库根目录
 
-如果你现在是直接在仓库里试用，**请先进入 CoDesk 仓库根目录再运行命令**。
-
-比如：
+如果你是直接在仓库里试用，**先进入 CoDesk 仓库根目录再运行命令**。
 
 ```bash
 cd /Users/starsama/Code/CoDesk
-PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup .
 ```
 
-这里的 `PYTHONPATH=src` 是相对当前目录解析的。
+原因很简单：当前用法里有一段 `PYTHONPATH=src`，它是按**当前目录**解释的。
 如果你不在仓库根目录，Python 找不到 `codesk` 包。
 
-### 一键创建协作空间
-
-最简单的用法：
+### 第二步：执行 setup
 
 ```bash
-cd /Users/starsama/Code/CoDesk
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup .
 ```
 
@@ -59,31 +99,29 @@ PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup .
 assistant-sync/
 ```
 
-同时完成这些事：
+然后它会同时做完这几件事：
 
-- 写入配置文件 `assistant-sync/config.yaml`
-- 生成初始报告文件
+- 写入 `assistant-sync/config.yaml`
+- 生成初始 reports
 - 打印两段可直接复制给两个 Agent 的 prompt
 
-### 带参数的初始化示例
+### 第三步：把两段 prompt 分别发给两个 Agent
 
-```bash
-cd /Users/starsama/Code/CoDesk
-PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup . \
-  --project-name "Alpha rollout" \
-  --objective "Keep two agents aligned on implementation" \
-  --agent-a hermes \
-  --agent-b openclaw \
-  --sync-frequency daily \
-  --notes "Use the shared blackboard for handoffs" \
-  --seed-project-id proj-alpha
+终端输出里会出现：
+
+```text
+===== PROMPT FOR AGENT 1 =====
+...
+
+===== PROMPT FOR AGENT 2 =====
+...
 ```
 
-适合你已经知道项目名、协作目标和初始 project id 的情况。
+你只需要把两段内容分别发给两个 Agent 就行。
 
 ---
 
-## setup 后会生成什么
+## 你会得到什么
 
 ### 配置文件
 
@@ -91,11 +129,11 @@ PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup . \
 assistant-sync/config.yaml
 ```
 
-这里面会保存：
+这里会保存：
 
 - 项目名
-- 目标描述
-- 两个 Agent 的身份
+- 协作目标
+- agent 身份
 - sync 频率
 - 工作区路径
 - 探测到的本地 agent 路径（如果有）
@@ -109,9 +147,9 @@ assistant-sync/shared/reports/sync-packet-hermes-to-openclaw.md
 assistant-sync/shared/reports/sync-packet-openclaw-to-hermes.md
 ```
 
-如果你换了 agent 名，sync packet 的文件名也会跟着变。
+如果你换了 agent 名，sync packet 文件名也会跟着变。
 
-### 共享工作区结构
+### 一份可读的共享空间
 
 ```text
 assistant-sync/
@@ -129,55 +167,71 @@ assistant-sync/
   config.yaml
 ```
 
----
-
-## setup 的输出长什么样
-
-命令执行成功后，终端会先看到这样的结构：
-
-```text
-CoDesk workspace created at:
-/path/to/project/assistant-sync
-
-Config written to:
-/path/to/project/assistant-sync/config.yaml
-
-Next step:
-1. Copy PROMPT A into Agent 1
-2. Copy PROMPT B into Agent 2
-3. Ask each agent to confirm its first sync run
-
-===== PROMPT FOR AGENT 1 =====
-...
-
-===== PROMPT FOR AGENT 2 =====
-...
-```
-
-你要做的事很简单：
-
-1. 复制 `PROMPT FOR AGENT 1`
-2. 发给第一个 Agent
-3. 复制 `PROMPT FOR AGENT 2`
-4. 发给第二个 Agent
+它不复杂，但够清楚。
 
 ---
 
-## 后续最常用的两个命令
+## 推荐工作方式
 
-### 重新打印 prompt
-
-如果你关掉终端了，或者想重新发一遍：
+最推荐的用法其实就三条命令：
 
 ```bash
 cd /Users/starsama/Code/CoDesk
+PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup .
+PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli show-config .
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli print-prompts .
 ```
 
-### 查看当前配置
+- `setup`：第一次拉起
+- `show-config`：确认配置是不是你想要的
+- `print-prompts`：需要重发 prompt 时再打一次
+
+如果你已经知道项目名、目标和初始 project id，可以直接这样：
 
 ```bash
-cd /Users/starsama/Code/CoDesk
+PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup . \
+  --project-name "Alpha rollout" \
+  --objective "Keep two agents aligned on implementation" \
+  --agent-a hermes \
+  --agent-b openclaw \
+  --sync-frequency daily \
+  --notes "Use the shared blackboard for handoffs" \
+  --seed-project-id proj-alpha
+```
+
+---
+
+## 常用命令
+
+### setup
+
+```bash
+PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup .
+```
+
+如果你不想把工作区建在当前目录，也可以显式给路径：
+
+```bash
+PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup /tmp/codesk-test
+```
+
+那它会创建：
+
+```text
+/tmp/codesk-test/assistant-sync
+```
+
+### print-prompts
+
+```bash
+PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli print-prompts .
+```
+
+适合终端关掉以后重新打印 prompt。
+
+### show-config
+
+```bash
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli show-config .
 ```
 
@@ -194,35 +248,17 @@ Workspace: /path/to/project/assistant-sync
 
 ---
 
-## 如果你不想把工作区建在当前目录
+## 手工工作流
 
-可以显式给一个路径：
-
-```bash
-cd /Users/starsama/Code/CoDesk
-PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup /tmp/codesk-test
-```
-
-这样它会创建：
-
-```text
-/tmp/codesk-test/assistant-sync
-```
-
----
-
-## 底层手工命令还在
-
-如果你不想走 `setup`，也可以继续用原来的文件级命令。
+如果你不想走 `setup`，原来的底层文件命令也都还在。
 
 ### 只初始化目录树
 
 ```bash
-cd /Users/starsama/Code/CoDesk
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli init .
 ```
 
-### 新建 project 记录
+### 新建 project
 
 ```bash
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli new-project . \
@@ -232,7 +268,7 @@ PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli new-project . \
   --status active
 ```
 
-### 新建 weekly 记录
+### 新建 weekly
 
 ```bash
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli new-weekly . \
@@ -240,7 +276,7 @@ PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli new-weekly . \
   --assistant hermes
 ```
 
-### 新建 handoff 记录
+### 新建 handoff
 
 ```bash
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli new-handoff . \
@@ -250,7 +286,7 @@ PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli new-handoff . \
   --project proj-alpha
 ```
 
-### 新建 decision 记录
+### 新建 decision
 
 ```bash
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli new-decision . \
@@ -264,7 +300,7 @@ PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli new-decision . \
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli validate .
 ```
 
-### 查看当前摘要
+### 查看摘要
 
 ```bash
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli status .
@@ -294,26 +330,34 @@ PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli generate-reports . \
 
 ---
 
-## 适合什么，不适合什么
+## 目录结构
 
-### 适合
+如果你直接用 `setup`，最后拿到的大致就是这套结构：
 
-- 两个 Agent 需要围绕同一个项目持续协作
-- 你想把协作状态留在文件里，而不是全靠对话上下文
-- 你想先把工作流跑通，再考虑更复杂的自动化
-
-### 不适合
-
-- 你需要实时消息中转
-- 你要多 Agent 编排平台
-- 你要数据库 / 向量库 / Web UI
-- 你想把 scheduler 也交给 CoDesk 统一托管
+```text
+assistant-sync/
+  blackboard/
+    projects/
+    weekly/
+    handoffs/
+    decisions/
+  hermes_to_openclaw/
+  openclaw_to_hermes/
+  shared/
+    reports/
+      weekly-digest.md
+      sync-packet-hermes-to-openclaw.md
+      sync-packet-openclaw-to-hermes.md
+  references/
+    source-pointers/
+  config.yaml
+```
 
 ---
 
-## 当前内建的 agent 支持
+## 当前内建支持
 
-目前内建了两类默认项：
+当前内建了两类默认项：
 
 - `hermes`
 - `openclaw`
@@ -330,7 +374,78 @@ CoDesk 会优先尝试探测这些常见本地路径：
 
 ---
 
-## 当前项目状态
+## faq
+
+### 为什么我运行 `PYTHONPATH=src ...` 会报 `ModuleNotFoundError: No module named 'codesk'`？
+
+因为你不在仓库根目录。
+
+正确姿势是先：
+
+```bash
+cd /Users/starsama/Code/CoDesk
+```
+
+再执行：
+
+```bash
+PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup .
+```
+
+### `setup .` 会把工作区建在哪里？
+
+会建在你当前目录下面的：
+
+```text
+assistant-sync/
+```
+
+比如你当前目录是：
+
+```text
+/Users/starsama/Code/CoDesk
+```
+
+那它会创建到：
+
+```text
+/Users/starsama/Code/CoDesk/assistant-sync
+```
+
+### 我关掉终端了，还能重新拿到 prompt 吗？
+
+可以：
+
+```bash
+PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli print-prompts .
+```
+
+### 我只想看配置，不想重跑 setup，怎么办？
+
+```bash
+PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli show-config .
+```
+
+---
+
+## 适合什么，不适合什么
+
+### 适合
+
+- 两个 Agent 围绕同一个项目持续协作
+- 你想把协作状态落在文件里，而不是只活在上下文里
+- 你想先把最小工作流跑通，再逐步加自动化
+
+### 不适合
+
+- 你需要实时消息中转
+- 你要多 Agent 编排平台
+- 你要数据库 / 向量库 / Web UI
+- 你想把 scheduler 也交给 CoDesk 托管
+
+---
+
+## roadmap
 
 这轮 bootstrap milestone 已经落地：
 
@@ -341,18 +456,24 @@ CoDesk 会优先尝试探测这些常见本地路径：
 - CLI product surface
 - README onboarding
 
-如果你现在只是想手动试一遍，最稳妥的起手式就是：
+下一步更自然的方向大概是：
+
+- `detect-agents` 调试命令
+- 更细的 interactive setup 体验
+- 更严格的 config 校验和错误提示
+- 打包与发布整理
+
+---
+
+## 最后一条建议
+
+如果你现在只是想亲手试一遍，最稳妥的起手式还是这三条：
 
 ```bash
 cd /Users/starsama/Code/CoDesk
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli setup .
-```
-
-跑完以后，再接：
-
-```bash
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli show-config .
 PYTHONPATH=src /usr/local/bin/python3 -m codesk.cli print-prompts .
 ```
 
-基本就够了。
+跑完你基本就能知道这个项目现在是不是你想要的那种手感了。

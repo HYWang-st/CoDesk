@@ -9,7 +9,7 @@ description = "Lightweight agent collaboration layer for structured assistant sy
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{name = "Wang / Hermes supervised Codex workflow"}]
-dependencies = []
+dependencies = ["PyYAML>=6"]
 
 [project.scripts]
 codesk = "codesk.cli:main"
